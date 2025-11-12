@@ -1,30 +1,60 @@
-name: TA-Lib System Install Test
+name: LocalStackを用いた統合テスト
+
 on: [push, pull_request]
 
 jobs:
-  test_ta_lib_install: # ジョブ名を変更
+  integration-test:
     runs-on: ubuntu-latest
+
+    # LocalStackコンテナをサービスとして起動
+    services:
+      # コンテナの名前 (Docker Hubから取得)
+      localstack:
+        image: localstack/localstack:latest
+        # LocalStackが待ち受けるポートを指定 (デフォルト: 4566)
+        ports:
+          - 4566:4566
+        # 環境変数: 必要なサービスを指定 (例: S3, DynamoDB)
+        env:
+          SERVICES: s3,dynamodb
+          # デフォルトの認証情報
+          AWS_ACCESS_KEY_ID: test
+          AWS_SECRET_ACCESS_KEY: test
+          AWS_DEFAULT_REGION: us-east-1
+          # コンテナがヘルスチェックをパスするのを待機
+        options: >
+          --health-cmd "curl -s http://localhost:4566/health | grep running"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
     steps:
-      - name: Checkout Code
+      - name: コードのチェックアウト
         uses: actions/checkout@v4
-        
-        # 1. TA-Lib 本体 (C言語ライブラリ) をソースからインストール
-      - name: Install TA-Lib from source
+
+      - name: Node.js/Python環境のセットアップ (例: Python)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: 依存関係のインストール
+        run: pip install -r requirements.txt # または npm install
+
+      # サービスの準備 (S3バケット作成など)
+      - name: ローカルAWSリソースのプロビジョニング
+        # LocalStackのCLI (awslocal) を使用してS3バケットを作成する例
         run: |
-          sudo apt-get update
-          # 必要なビルドツールをインストール
-          sudo apt-get install -y build-essential wget
-          # TA-Libのソースコードをダウンロード、コンパイル、インストール
-          wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz
-          tar -xzvf ta-lib-0.4.0-src.tar.gz
-          cd ta-lib/
-          ./configure --prefix=/usr
-          make
-          sudo make install
-      
-      - name: Verify TA-Lib installation (Optional)
-        run: ls /usr/lib | grep ta_lib # 成功すると ta_lib.a や ta_lib.so が表示されるはず
+          pip install awscli-local
+          awslocal s3 mb s3://my-local-test-bucket
+          awslocal dynamodb create-table --table-name MyTable --attribute-definitions AttributeName=ID,AttributeType=S --key-schema AttributeName=ID,KeyType=HASH --provisioned-throughput ReadCapacityUnits=5,WriteCapacityUnits=5
 
-      - name: Just print a message
-        run: echo "System dependencies installed successfully."
-
+      # アプリケーションの統合テストを実行
+      - name: 統合テストの実行
+        env:
+          # アプリケーションが参照するエンドポイントを設定
+          S3_ENDPOINT_URL: http://localstack:4566
+          DYNAMODB_ENDPOINT_URL: http://localstack:4566
+          AWS_ACCESS_KEY_ID: test
+          AWS_SECRET_ACCESS_KEY: test
+          AWS_REGION: us-east-1
+        run: pytest integration_tests/
