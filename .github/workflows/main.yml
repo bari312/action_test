@@ -1,0 +1,57 @@
+name: LocalStack CI Test
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    # LocalStackコンテナを連携サービスとして起動
+    services:
+      localstack:
+        image: localstack/localstack:latest
+        ports:
+          - 4566:4566
+        environment:
+          # S3サービスのみを起動
+          - LOCALSTACK_SERVICES=s3
+          # LocalStackのポートを指定
+          - EDGE_PORT=4566 
+        
+        # サービスが利用可能になるまで待機するためのヘルスチェック
+        options: >
+          --health-cmd "curl -s http://localhost:4566/health | grep 'running' > /dev/null"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install dependencies
+        run: pip install boto3 pytest
+
+      # テストの実行
+      - name: Run S3 LocalStack Test
+        run: |
+          # 1. テストに必要な情報を環境変数に設定
+          # LocalStackを使うため、エンドポイントURLを指定
+          export AWS_ENDPOINT_URL="http://localhost:4566"
+          # ダミーの認証情報（LocalStackでは内容は何でもよい）
+          export AWS_ACCESS_KEY_ID="test"
+          export AWS_SECRET_ACCESS_KEY="test"
+          export AWS_DEFAULT_REGION="ap-northeast-1"
+          
+          # 2. テストの実行（例：pytestを実行）
+          # LocalStackのエンドポイントURLを使ってboto3が接続される
+          pytest your_s3_test_file.py
