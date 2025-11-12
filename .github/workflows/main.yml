@@ -34,11 +34,30 @@ jobs:
         run: pip install awscli-local
 
       # LocalStackの準備ができるまで待機（環境によっては必要）
-      - name: Wait for LocalStack to be ready
-        # LocalStackのエンドポイントのヘルスチェックを待つ
+      # 🚨 修正後のステップ 🚨
+      - name: Wait for LocalStack to be ready with retry
+        timeout-minutes: 5 # タイムアウトを設定
         run: |
-          awslocal s3 ls --endpoint-url=http://localstack:4566
-          # 成功するまでリトライするロジックを追加しても良い
+          MAX_RETRIES=10
+          for i in $(seq 1 $MAX_RETRIES); do
+            echo "Attempt $i/$MAX_RETRIES: Checking LocalStack readiness..."
+            # awslocalの実行結果（終了コード）をチェック
+            awslocal s3 ls --endpoint-url=http://localstack:4566 2>/dev/null
+            
+            if [ $? -eq 0 ]; then
+              echo "✅ LocalStack is ready."
+              exit 0
+            fi
+            
+            if [ $i -lt $MAX_RETRIES ]; then
+              echo "Waiting 5 seconds before next retry..."
+              sleep 5
+            fi
+          done
+          
+          echo "❌ LocalStack failed to start after $MAX_RETRIES attempts."
+          exit 1 # リトライ失敗でジョブを失敗させる
+        shell: bash
       
       # LocalStack上でS3操作を実行
       - name: Create S3 bucket
