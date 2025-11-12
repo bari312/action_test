@@ -72,5 +72,5 @@ jobs:
     # The extension(s) to automatically install on startup of LocalStack, the env var EXTENSION_AUTO_INSTALL
             extension-auto-install: default
     # The lifetime of the ephemeral instance, how long the instance should be available for
-    lifetime: # optional, default is 30
+            lifetime: default 
           
