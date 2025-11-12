@@ -1,50 +1,44 @@
-name: CI with LocalStack
+name: LocalStack Example
 
 on: [push, pull_request]
 
 jobs:
-  localstack_test:
-    # 実行環境を指定
+  test:
     runs-on: ubuntu-latest
-    
-    # LocalStackコンテナをサービスとして定義
+
     services:
       localstack:
-        # LocalStackのDockerイメージ
         image: localstack/localstack:latest
-        
-        # LocalStackコンテナ内のポート4566をホストに公開
         ports:
-          - "4566:4566"
-        
-        # LocalStackの設定（ここではS3サービスのみを有効化）
+          - 4566:4566   # LocalStackのメインポート
         env:
-          SERVICES: s3 
-          DEFAULT_REGION: us-east-1
-          AWS_ACCESS_KEY_ID: test
-          AWS_SECRET_ACCESS_KEY: test
-          AWS_ENDPOINT_URL: http://localstack:4566 # サービス名でアクセス
-          
+          SERVICES: s3,sqs,dynamodb
+          DEBUG: 1
+        options: >-
+          --health-cmd="curl -f http://localhost:4566/health || exit 1"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      # awslocal CLIのインストール（LocalStackへのアクセス用）
-      - name: Install awslocal CLI
-        run: pip install awscli-local
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
 
-      # LocalStackの準備ができるまで待機（環境によっては必要）
-      - name: Wait for LocalStack to be ready
-        # LocalStackのエンドポイントのヘルスチェックを待つ
+      - name: Install dependencies
         run: |
-          sleep 100
-          awslocal s3 ls --endpoint-url=http://localstack:4566/health
-          # 成功するまでリトライするロジックを追加しても良い
-      
-      # LocalStack上でS3操作を実行
-      - name: Create S3 bucket
+          pip install boto3 localstack-client pytest
+
+      - name: Run tests
+        env:
+          AWS_ACCESS_KEY_ID: test
+          AWS_SECRET_ACCESS_KEY: test
+          AWS_DEFAULT_REGION: us-east-1
+          LOCALSTACK_ENDPOINT: http://localhost:4566
         run: |
-          BUCKET_NAME="my-test-bucket-$(date +%s)"
-          # awslocalを使ってLocalStackのS3エンドポイントを指定してバケットを作成
-          awslocal s3 mb s3://$BUCKET_NAME --endpoint-url=http://localstack:4566
-          echo "Created bucket: $BUCKET_NAME"
+          pytest
+
