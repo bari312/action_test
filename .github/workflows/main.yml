@@ -1,76 +1,50 @@
-name: TA-Lib System Install Test
+name: CI with LocalStack
+
 on: [push, pull_request]
 
 jobs:
-  test_ta_lib_install: # ジョブ名を変更
+  localstack_test:
+    # 実行環境を指定
     runs-on: ubuntu-latest
+    
+    # LocalStackコンテナをサービスとして定義
+    services:
+      localstack:
+        # LocalStackのDockerイメージ
+        image: localstack/localstack:latest
+        
+        # LocalStackコンテナ内のポート4566をホストに公開
+        ports:
+          - "4566:4566"
+        
+        # LocalStackの設定（ここではS3サービスのみを有効化）
+        env:
+          SERVICES: s3 
+          DEFAULT_REGION: us-east-1
+          AWS_ACCESS_KEY_ID: test
+          AWS_SECRET_ACCESS_KEY: test
+          AWS_ENDPOINT_URL: http://localstack:4566 # サービス名でアクセス
+          
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-        
-        # 1. TA-Lib 本体 (C言語ライブラリ) をソースからインストール
-      - name: Install TA-Lib from source
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # awslocal CLIのインストール（LocalStackへのアクセス用）
+      - name: Install awslocal CLI
+        run: pip install awscli-local
+
+      # LocalStackの準備ができるまで待機（環境によっては必要）
+      - name: Wait for LocalStack to be ready
+        # LocalStackのエンドポイントのヘルスチェックを待つ
         run: |
-          sudo apt-get update
-          # 必要なビルドツールをインストール
-          sudo apt-get install -y build-essential wget
-          # TA-Libのソースコードをダウンロード、コンパイル、インストール
-          wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz
-          tar -xzvf ta-lib-0.4.0-src.tar.gz
-          cd ta-lib/
-          ./configure --prefix=/usr
-          make
-          sudo make install
+          awslocal s3 ls --endpoint-url=http://localstack:4566
+          # 成功するまでリトライするロジックを追加しても良い
       
-      - name: Verify TA-Lib installation (Optional)
-        run: ls /usr/lib | grep ta_lib # 成功すると ta_lib.a や ta_lib.so が表示されるはず
-
-      - name: Just print a message
-        run: echo "System dependencies installed successfully."
-        
-      - name: Setup LocalStack
-  # You may pin to the exact commit or the version.
-  # uses: localstack/setup-localstack@9392b05ddb345894c2e86305fc426566e738c1db
-        uses: localstack/setup-localstack@v0.2.4
-        with:
-            image-tag: latest
-            install-awslocal: default 
-    # Whether to use LocalStack Pro (requires a valid API key)
-            use-pro: default
-    # Configuration variables to use for LocalStack
-            configuration: default  
-    # Name of the CI project to track in LocalStack Cloud
-            ci-project: default 
-    # Github token used to create PR comments
-            github-token: default  
-    # Command(s) used to create an Ephemeral Instance of the PR (can use $AWS_ENDPOINT_URL)
-            preview-cmd: default
-    # Whether to include the created Ephemeral Instance URL in the PR comment
-            include-preview: default
-    # Explicitly prevent LocalStack start up, only installs CLI(s).
-# Recommended to manage state later on in the pipeline or start up an ephemeral instance
-
-            skip-startup: default 
-    # Skip wait for LocalStack
-            skip-wait: default 
-    # Skip stopping LocalStack Ephemeral Instance
-            skip-ephemeral-stop: default 
-    # Manage LocalStack state
-# Valid values are `load`, `save`, `start`, `stop`, `` (empty, don't manage state)
-# Values `start`/`stop` only usable with Ephemeral Instances.
-
-            state-action: default 
-    # Either store the state of LocalStack locally, as a cloud pod or start up an ephemeral instance.
-# Valid values are `cloud-pods`, `ephemeral` or `local`.
-# Use this option in unison with `state-action` to control behaviour.
-
-            state-backend: default
-    # Name of the state artifact (without extension)
-            state-name: default
-    # The pod to load on startup of LocalStack, the env var AUTO_LOAD_POD
-            auto-load-pod: default  
-    # The extension(s) to automatically install on startup of LocalStack, the env var EXTENSION_AUTO_INSTALL
-            extension-auto-install: default
-    # The lifetime of the ephemeral instance, how long the instance should be available for
-            lifetime: default 
+      # LocalStack上でS3操作を実行
+      - name: Create S3 bucket
+        run: |
+          BUCKET_NAME="my-test-bucket-$(date +%s)"
+          # awslocalを使ってLocalStackのS3エンドポイントを指定してバケットを作成
+          awslocal s3 mb s3://$BUCKET_NAME --endpoint-url=http://localstack:4566
+          echo "Created bucket: $BUCKET_NAME"
           
