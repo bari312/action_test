@@ -33,7 +33,7 @@ jobs:
   # uses: localstack/setup-localstack@9392b05ddb345894c2e86305fc426566e738c1db
         uses: localstack/setup-localstack@v0.2.4
         with:
-            image-tag: default
+            image-tag: latest
             install-awslocal: default 
     # Whether to use LocalStack Pro (requires a valid API key)
             use-pro: default
