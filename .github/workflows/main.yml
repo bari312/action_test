@@ -32,7 +32,7 @@ jobs:
       - name: コードのチェックアウト
         uses: actions/checkout@v4
 
-      - name: Node.js/Python環境のセットアップ (例: Python)
+      - name: Node.js/Python環境のセットアップ 
         uses: actions/setup-python@v5
         with:
           python-version: '3.x'
