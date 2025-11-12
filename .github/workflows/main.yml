@@ -1,6 +1,9 @@
-name: LocalStack Example
+name: LocalStack CI Test
 
-on: [push, pull_request]
+on:
+  push:
+    branches: [ main ]
+  pull_request:
 
 jobs:
   test:
@@ -10,35 +13,41 @@ jobs:
       localstack:
         image: localstack/localstack:latest
         ports:
-          - 4566:4566   # LocalStackのメインポート
+          - 4566:4566  # LocalStackメインポート
         env:
-          SERVICES: s3,sqs,dynamodb
+          SERVICES: s3,sqs,dynamodb  # 必要なAWSサービスを指定
           DEBUG: 1
         options: >-
-          --health-cmd="curl -f http://localhost:4566/health || exit 1"
+          --health-cmd="curl -f http://localhost:4566/_localstack/health || exit 1"
           --health-interval=5s
-          --health-timeout=5s
           --health-retries=20
+          --health-timeout=3s
 
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: '3.11'
 
       - name: Install dependencies
         run: |
-          pip install boto3 localstack-client pytest
+          pip install boto3 pytest localstack-client
+
+      - name: Wait for LocalStack
+        run: |
+          until curl -s http://localhost:4566/_localstack/health | grep '"initialized": true'; do
+            echo "Waiting for LocalStack..."
+            sleep 5
+          done
 
       - name: Run tests
         env:
           AWS_ACCESS_KEY_ID: test
           AWS_SECRET_ACCESS_KEY: test
           AWS_DEFAULT_REGION: us-east-1
-          LOCALSTACK_ENDPOINT: http://localhost:4566
-        run: |
-          pytest
-
+          LOCALSTACK_HOST: localhost
+          AWS_ENDPOINT_URL: http://localhost:4566
+        run: pytest tests/
