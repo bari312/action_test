@@ -43,8 +43,9 @@ jobs:
           AWS_SECRET_ACCESS_KEY: test
           AWS_DEFAULT_REGION: us-east-1
           LOCALSTACK_HOST: localhost
-          AWS_ENDPOINT_URL: http://localhost:4566
-          run: python test.py
+          AWS_ENDPOINT_URL: http://localhost:4566　　　
+          
+        run: python test.py
 
 
 
